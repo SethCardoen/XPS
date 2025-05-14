@@ -1,0 +1,26 @@
+Dinskes die we moeten doen....
+
+no shift here from charging
+
+- crop peaks more
+- crop before the Shirley (first do Shirley again)
+
+For voigt
+- define peaks --> from numbers of database
+- do voigt around it (with ofset of about 0.2)
+
+xps database
+
+Si peaks
+
+
+C peaks
+sp2: 284.4
+sp3: 284.7
+everything else: (around C-O-C) 285 some weird carbon compounds --> hydro carbons don't need to care
+maybe another peak above 285 if that works
+Don't take into account little bumb in 275, is just an artifact
+
+
+
+O peaks
