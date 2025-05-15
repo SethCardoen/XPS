@@ -7,6 +7,9 @@ import matplotlib.pyplot as plt
 mg_path = "./GR_SiC_0_C/Mg300w/full_scan.txt"
 al_path = "./GR_SiC_0_C/Al300w/full_scan.txt"
 
+#mg_path = "./GR_SiC_450_C/Mg300w/full_scan.txt"
+#al_path = "./GR_SiC_450_C/Al300w/full_scan.txt"
+
 mg_data = np.loadtxt(mg_path, delimiter="\t")
 al_data = np.loadtxt(al_path, delimiter="\t")
 

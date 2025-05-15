@@ -5,6 +5,9 @@
 from scipy.optimize import curve_fit
 from scipy.special import wofz
 
+#element_to_plot = "Al"
+element_to_plot = "Mg"
+
 def voigt(x, amp, cen, sigma, gamma):
     z = ((x - cen) + 1j*gamma) / (sigma * np.sqrt(2))
     return amp * np.real(wofz(z)) / (sigma * np.sqrt(2*np.pi))
@@ -75,25 +78,32 @@ for label, y_vals in carbon_data.items():
     x = carbon_x_vals
     y = y_vals
 
+    # --- Configurable upper bounds for peak widths ---
+    upper_green = 0.5   # for sp2 graphene
+    upper_red = 0.3     # for sp3 C=C
+    upper_purple = 0.5  # for hydro carbons
+    upper_brown = 0.5   # for additional hydrocarbons
+
     # Initial guesses for 4 peaks: amp, center, sigma, gamma
     p0 = [
-        max(y), 284.4, 0.1, 0.1,
-        max(y)/2, 284.7, 0.1, 0.1,
+        max(y), 284.5, 0.25, 0.25,
+        max(y)/2, 284.8, 0.2, 0.2,
         max(y)/3, 285.5, 0.1, 0.1,
         max(y)/4, 286.0, 0.1, 0.1,
     ]
 
     bounds_lower = [
-        0, 284.2, 0, 0,
-        0, 284.55, 0, 0,
-        0, 285.5, 0, 0,
-        0, 286, 0, 0,
+        0, 284.3, 0, 0,
+        0, 284.65, 0, 0,
+        0, 285.4, 0, 0,
+        0, 285.9, 0, 0,
     ]
+
     bounds_upper = [
-        np.inf, 284.55, np.inf, np.inf,
-        np.inf, 284.9, np.inf, np.inf,
-        np.inf, 286.0, np.inf, np.inf,
-        np.inf, 286.5, np.inf, np.inf,
+        np.inf, 284.5, upper_green, upper_green,
+        np.inf, 284.85, upper_red, upper_red,
+        np.inf, 286.5, upper_purple, upper_purple,
+        np.inf, 286.5, upper_brown, upper_brown,
     ]
 
     try:
@@ -107,7 +117,7 @@ for label, y_vals in carbon_data.items():
 
         print(f"\nVoigt fit for {label}")
         print(f"{'Component':<10} {'Center':>10} {'Bounds':>20} {'FWHM':>10} {'Area':>15} {'% of Total':>15}")
-        for i in range(0, len(popt), 4):
+        for i in range(0, 16, 4):
             amp, cen, sigma, gamma = popt[i:i+4]
             fwhm = 0.5346 * 2 * gamma + np.sqrt(0.2166 * (2 * gamma)**2 + (2.3548 * sigma)**2)
             y_comp = voigt(x_dense, amp, cen, sigma, gamma)
@@ -123,10 +133,13 @@ for label, y_vals in carbon_data.items():
 
 y_max_dict = {"Al": y_max_al * 1.1, "Mg": y_max_mg * 1.1}
 
-fig, axs = plt.subplots(2, 3, figsize=(15, 10))
-axs = axs.flatten()
+plot_data = [(label, y_vals) for label, y_vals in carbon_data.items() if label.startswith(element_to_plot)]
+fig, axs = plt.subplots(1, len(plot_data), figsize=(5 * len(plot_data), 5))
+if len(plot_data) == 1:
+    axs = [axs]
+fig.suptitle("Carbon Voigt Fits", fontsize=16, y=0.98)
 
-for i, (label, y_vals) in enumerate(carbon_data.items()):
+for i, (label, y_vals) in enumerate(plot_data):
     ax = axs[i]
     ax.plot(carbon_x_vals, y_vals, label=label)
     if fit_results[label] is not None:
@@ -134,16 +147,16 @@ for i, (label, y_vals) in enumerate(carbon_data.items()):
         y_fit = multi_voigt(x_fit, *fit_results[label])
         ax.plot(x_fit, y_fit, '--', label="Voigt Fit")
         params = fit_results[label]
-        for j in range(0, len(params), 4):
+        for j in range(0, 16, 4):
             y_component = voigt(x_fit, *params[j:j+4])
             if j == 0:
-                label_component = "sp2"
+                label_component = "sp2 graphene"
             elif j == 4:
-                label_component = "sp3"
+                label_component = "sp3 C=C"
             elif j == 8:
-                label_component = "hydro carbons/carbon compounds"
+                label_component = "hydro carbons"
             elif j == 12:
-                label_component = "hydro carbons/carbon compounds"
+                label_component = "hydro carbons"
             else:
                 label_component = None
             ax.plot(x_fit, y_component, linestyle='-', alpha=0.7, label=label_component)
@@ -159,61 +172,122 @@ for i, (label, y_vals) in enumerate(carbon_data.items()):
     ax.set_ylim(0, y_max_dict[element_key])
     ax.invert_xaxis()
 
-fig.tight_layout()
+fig.tight_layout(rect=[0, 0, 1, 0.95])
 plt.show()
 
-# --- Summary plots of component percentage vs. temperature for Al and Mg ---
-import matplotlib.pyplot as plt
+# --- Summary plots of component percentage vs. temperature for Al and Mg using actual fits ---
 
-al_percentages = {
-    "0°C": [36.65, 32.57, 22.30, 8.47],
-    "250°C": [48.87, 34.53, 2.71, 13.88],
-    "450°C": [48.87, 34.53, 2.71, 13.88]
-}
+if element_to_plot == "Al":
+    al_percentages = {}
 
-mg_percentages = {
-    "0°C": [37.04, 39.65, 9.64, 13.67],
-    "250°C": [46.08, 33.73, 8.88, 11.30],
-    "450°C": [46.08, 33.73, 8.88, 11.30]
-}
+    for label, params in fit_results.items():
+        if params is None:
+            continue
 
-temperatures = [0, 250, 450]
-labels = ["sp2", "sp3", "hydrocarbons (1)", "hydrocarbons (2)"]
+        element, temp_label = label.split("_")
+        if element != "Al":
+            continue
+        x_dense = np.linspace(carbon_x_vals.min(), carbon_x_vals.max(), 2000)
+        total_y = multi_voigt(x_dense, *params)
+        total_area = trapezoid(total_y, x_dense)
 
-component_colors = {
-    "sp2": 'tab:green',
-    "sp3": 'tab:red',
-    "hydro carbons/carbon compounds": 'tab:purple'
-}
+        percentages = []
+        for i in range(0, len(params), 4):
+            y_comp = voigt(x_dense, *params[i:i+4])
+            area = trapezoid(y_comp, x_dense)
+            percent = 100 * area / total_area
+            percentages.append(percent)
 
-fig, (ax_al, ax_mg) = plt.subplots(1, 2, figsize=(14, 6))
+        al_percentages[temp_label] = percentages
 
-# Update color list to match legend colors from the plot
-summary_component_colors = [component_colors["sp2"], component_colors["sp3"], 'tab:purple', 'tab:brown']
+    temperatures = [0, 250, 450]
+    labels = ["sp2", "sp3", "hydrocarbons", "extra"]
 
-for i, label in enumerate(labels):
-    ax_al.plot(
-        temperatures,
-        [al_percentages[f"{t}°C"][i] for t in temperatures],
-        label=label, marker='o', color=summary_component_colors[i]
-    )
-    ax_mg.plot(
-        temperatures,
-        [mg_percentages[f"{t}°C"][i] for t in temperatures],
-        label=label, marker='o', color=summary_component_colors[i]
-    )
+    component_colors = {
+        "sp2": 'tab:green',
+        "sp3": 'tab:red',
+        "hydro carbons/carbon compounds": 'tab:purple',
+        "extra": 'tab:brown'
+    }
 
-ax_al.set_title("Al: Percentage of Total Area vs Temperature")
-ax_al.set_xlabel("Temperature (°C)")
-ax_al.set_ylabel("Percentage of Total Area (%)")
-ax_al.legend()
-ax_al.grid(True)
+    fig, ax_al = plt.subplots(1, 1, figsize=(7, 6))
+    summary_component_colors = [
+        component_colors["sp2"],
+        component_colors["sp3"],
+        component_colors["hydro carbons/carbon compounds"],
+        component_colors["extra"]
+    ]
 
-ax_mg.set_title("Mg: Percentage of Total Area vs Temperature")
-ax_mg.set_xlabel("Temperature (°C)")
-ax_mg.set_ylabel("Percentage of Total Area (%)")
-ax_mg.legend()
-ax_mg.grid(True)
+    for i, label in enumerate(labels):
+        ax_al.plot(
+            temperatures,
+            [al_percentages[f"{t}°C"][i] if f"{t}°C" in al_percentages else None for t in temperatures],
+            label=label, marker='o', color=summary_component_colors[i]
+        )
 
-fig.tight_layout()
-plt.show()
+    ax_al.set_title("Al: Percentage of Total Area vs Temperature")
+    ax_al.set_xlabel("Temperature (°C)")
+    ax_al.set_ylabel("Percentage of Total Area (%)")
+    ax_al.legend()
+    ax_al.grid(True)
+
+    fig.tight_layout()
+    plt.show()
+
+elif element_to_plot == "Mg":
+    mg_percentages = {}
+
+    for label, params in fit_results.items():
+        if params is None:
+            continue
+
+        element, temp_label = label.split("_")
+        if element != "Mg":
+            continue
+        x_dense = np.linspace(carbon_x_vals.min(), carbon_x_vals.max(), 2000)
+        total_y = multi_voigt(x_dense, *params)
+        total_area = trapezoid(total_y, x_dense)
+
+        percentages = []
+        for i in range(0, len(params), 4):
+            y_comp = voigt(x_dense, *params[i:i+4])
+            area = trapezoid(y_comp, x_dense)
+            percent = 100 * area / total_area
+            percentages.append(percent)
+
+        mg_percentages[temp_label] = percentages
+
+    temperatures = [0, 250, 450]
+    labels = ["sp2", "sp3", "hydrocarbons", "extra"]
+
+    component_colors = {
+        "sp2": 'tab:green',
+        "sp3": 'tab:red',
+        "hydro carbons/carbon compounds": 'tab:purple',
+        "extra": 'tab:brown'
+    }
+
+    fig, ax_mg = plt.subplots(1, 1, figsize=(7, 6))
+    fig.suptitle("Carbon Peak Fit Evolution for Mg", fontsize=16, y=0.98)
+    summary_component_colors = [
+        component_colors["sp2"],
+        component_colors["sp3"],
+        component_colors["hydro carbons/carbon compounds"],
+        component_colors["extra"]
+    ]
+
+    for i, label in enumerate(labels):
+        ax_mg.plot(
+            temperatures,
+            [mg_percentages[f"{t}°C"][i] if f"{t}°C" in mg_percentages else None for t in temperatures],
+            label=label, marker='o', color=summary_component_colors[i]
+        )
+
+    ax_mg.set_title("Mg: Percentage of Total Area vs Temperature")
+    ax_mg.set_xlabel("Temperature (°C)")
+    ax_mg.set_ylabel("Percentage of Total Area (%)")
+    ax_mg.legend()
+    ax_mg.grid(True)
+
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    plt.show()

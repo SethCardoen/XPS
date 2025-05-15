@@ -37,6 +37,9 @@ crop_ranges = {
     "500_550": (526, 540)
 }
 
+# element selection
+element = "Mg"
+
 # Background subtraction
 def shirley_background(y, max_iter=100, tol=1e-5):
     y = np.array(y)
@@ -62,9 +65,11 @@ def voigt(x, amplitude, center, sigma, gamma):
 
 max_voigts = 3
 percentage_data = {"Si": [], "C": [], "O": []}
+area_fraction_data = {"Si": [], "C": [], "O": []}
+all_voigt_plots = []
 
 for label in annealing_labels:
-    base_path = f"{annealing_dirs[label]}/Al300w/"
+    base_path = f"{annealing_dirs[label]}/{element}300w/"
     ratio_dict = {}
     cropped_bgsub_data = {}
     x_cropped_dict = {}
@@ -88,6 +93,8 @@ for label in annealing_labels:
             continue
 
     for key in crop_ranges:
+        if key not in ["70_130", "260_300", "500_550"]:
+            continue
         x_vals = x_cropped_dict.get(key)
         y_vals = cropped_bgsub_data.get(key)
         if x_vals is None or y_vals is None:
@@ -130,33 +137,65 @@ for label in annealing_labels:
             sig = sigma_Al[measured_element]
             ratio = -total_area / (lam * sig)
             ratio_dict[key] = ratio
-
-    total_ratio = 0
-    element_contributions = {}
-    for key, value in ratio_dict.items():
-        el = element_map[key]
-        if el == "Si" and key != "140_200":
-            continue
-        total_ratio += value
-        element_contributions[el] = element_contributions.get(el, 0) + value
+            all_voigt_plots.append((f"{label} - {key}", x_vals, y_vals, best_fit))
 
     for el in ["Si", "C", "O"]:
-        percent = (element_contributions.get(el, 0) / total_ratio) * 100 if total_ratio > 0 else 0
-        percentage_data[el].append(percent)
+        percentage_data[el].append(0)
 
-# Plotting 1x3 layout
-fig, axs = plt.subplots(1, 3, figsize=(15, 4))
+    element_area_contributions = {"Si": 0.0, "C": 0.0, "O": 0.0}
+    for key, fit in zip(ratio_dict.keys(), all_voigt_plots[-len(ratio_dict):]):
+        label_fit, x_fit, _, y_fit = fit
+        el = element_map[key]
+        area = np.trapezoid(y_fit, x_fit)
+        element_area_contributions[el] += area
+
+    total_area = sum(element_area_contributions.values())
+
+    print(f"\nAreas for {label}:")
+    for el in ["Si", "C", "O"]:
+        print(f"{el} area: {element_area_contributions[el]}")
+    print(f"Total area: {total_area}")
+
+    for el in ["Si", "C", "O"]:
+        percent = (element_area_contributions[el] / total_area * 100) if total_area > 0 else 0
+        percentage_data[el][-1] = percent
+
+    for el in ["Si", "C", "O"]:
+        fraction = (element_area_contributions[el] / total_area) if total_area != 0 else 0
+        area_fraction_data[el].append(fraction)
 
 elements = ["Si", "C", "O"]
-for i, el in enumerate(elements):
-    axs[i].plot(temperature_values, percentage_data[el], marker='o')
-    axs[i].set_ylabel(f"{el} (%)")
-    axs[i].set_title(f"{el} Percentage vs Annealing Temperature")
-    axs[i].grid(True)
-    y_vals = percentage_data[el]
-    y_center = np.mean(y_vals)
-    axs[i].set_ylim(y_center - 2.5, y_center + 2.5)
 
-axs[1].set_xlabel("Annealing Temperature (°C)")
+fig_frac, axs_frac = plt.subplots(1, 3, figsize=(15, 4))
+
+for i, el in enumerate(elements):
+    percent_vals = [v * 100 for v in area_fraction_data[el]]
+    axs_frac[i].plot(temperature_values, percent_vals, marker='o')
+    axs_frac[i].set_ylabel(f"{el} (%)")
+    axs_frac[i].set_title(f"{el} Area Fraction vs Annealing Temperature")
+    axs_frac[i].grid(True)
+    y_center = np.mean(percent_vals)
+    y_range = max(5, (max(percent_vals) - min(percent_vals)) * 1.2)
+    axs_frac[i].set_ylim(y_center - y_range / 2, y_center + y_range / 2)
+
+axs_frac[1].set_xlabel("Annealing Temperature (°C)")
+plt.tight_layout()
+plt.show()
+
+# Plot all Voigt fits in a 3x3 grid
+fig_voigt, axs_voigt = plt.subplots(3, 3, figsize=(15, 12))
+axs_voigt = axs_voigt.flatten()
+
+filtered_voigt_plots = [tpl for tpl in all_voigt_plots if any(k in tpl[0] for k in ["70_130", "260_300", "500_550"])]
+for i, (title, x, y, fit) in enumerate(filtered_voigt_plots[:9]):
+    axs_voigt[i].plot(x, y, label='Data')
+    axs_voigt[i].plot(x, fit, label='Voigt Fit', linestyle='--')
+    title = title.replace("70_130", "Silicon").replace("260_300", "Carbon").replace("500_550", "Oxygen")
+    axs_voigt[i].set_title(title)
+    axs_voigt[i].legend()
+    axs_voigt[i].grid(True)
+    axs_voigt[i].relim()
+    axs_voigt[i].autoscale_view()
+
 plt.tight_layout()
 plt.show()

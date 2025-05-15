@@ -2,8 +2,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Define file paths
-mg_path = "./GR_SiC_0_C/Mg300w/70_130.txt"
 al_path = "./GR_SiC_0_C/Al300w/70_130.txt"
+mg_path = "./GR_SiC_0_C/Mg300w/70_130.txt"
+
+#al_path = "./GR_SiC_450_C/Al300w/70_130.txt"
+#mg_path = "./GR_SiC_450_C/Mg300w/70_130.txt"
 
 # Load the data
 mg_data = np.loadtxt(mg_path, delimiter="\t")

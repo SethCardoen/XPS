@@ -46,8 +46,8 @@ crop_ranges = {
     "260_300": (280, 290),
     "500_550": (526, 540)
 }
-silicon_file = "70_130.txt"
-crop_start, crop_end = crop_ranges["70_130"]
+silicon_file = "500_550.txt"
+crop_start, crop_end = crop_ranges["500_550"]
 
 selected_label = "0°C"  # or "250°C", "450°C"
 
@@ -75,22 +75,30 @@ for label, y_vals in silicon_data.items():
     x = silicon_x_vals
     y = y_vals
 
-    # Initial guesses for 2 peaks: amp, center, sigma, gamma
+    # Initial guesses for 4 peaks: amp, center, sigma, gamma (O 1s core level info)
     p0 = [
-        max(y), 100.5, 0.1, 0.1,
-        max(y)/2, 103.0, 0.05, 0.05
+        max(y), 531.3, 0.2, 0.2,   # C-O compounds
+        max(y)/2, 532.5, 0.2, 0.2, # hydrocarbons
+        max(y)/2.5, 533.1, 0.2, 0.2, # Si oxide
+        max(y)/3, 534.5, 0.2, 0.2   # adsorbed water / organics
     ]
 
     bounds_lower = [
-        0, 99.0, 0, 0,
-        0, 102.4, 0, 0
+        0, 531.1, 0, 0,
+        0, 532.0, 0, 0,
+        0, 532.8, 0, 0,
+        0, 534.0, 0, 0
     ]
-    upper_green = 0.5
-    upper_red = 0.5
+
+    primary_limit = 0.5
+    secondary_limit = 0.3
+    tird_limit = 0.3
 
     bounds_upper = [
-        np.inf, 102.0, upper_green, upper_green,
-        np.inf, 103.5, upper_red, upper_red
+        np.inf, 531.6, primary_limit, primary_limit,
+        np.inf, 533.0, secondary_limit, secondary_limit,
+        np.inf, 533.4, tird_limit, tird_limit,
+        np.inf, 535.5, tird_limit, tird_limit,
     ]
 
     try:
@@ -112,6 +120,17 @@ for label, y_vals in silicon_data.items():
         print(f"[Warning] Fit failed for {label}")
         fit_results[label] = None
 
+percent_results = {}
+for label, popt in fit_results.items():
+    if popt is not None:
+        x_dense = np.linspace(min(silicon_x_vals), max(silicon_x_vals), 1000)
+        areas = []
+        for j in range(0, len(popt), 4):
+            y_component = voigt(x_dense, *popt[j:j+4])
+            area = trapezoid(y_component, x_dense)
+            areas.append(area)
+        percent_results[label] = [100 * a / sum(areas) for a in areas]
+
 y_max_dict = {label: y_max_al * 1.1 for label in silicon_data}
 # Based on silicon intensity
 
@@ -128,15 +147,20 @@ for i, (label, y_vals) in enumerate(silicon_data.items()):
         total_area = trapezoid(y_fit, x_fit)
         print(f"Total area for {label}: {total_area}")
         params = fit_results[label]
+        x_dense = np.linspace(x_fit.min(), x_fit.max(), 2000)
         for j in range(0, len(params), 4):
-            y_component = voigt(x_fit, *params[j:j+4])
+            y_component = voigt(x_dense, *params[j:j+4])
             if j == 0:
-                label_component = "SiC"
+                label_component = "C-O compounds"
             elif j == 4:
-                label_component = "SiO2"
+                label_component = "Hydrocarbons"
+            elif j == 8:
+                label_component = "Si oxides"
+            elif j == 12:
+                label_component = "Adsorbed water / organics"
             else:
                 label_component = None
-            ax.plot(x_fit, y_component, linestyle='-', alpha=0.7, label=label_component)
+            ax.plot(x_dense, y_component, linestyle='-', alpha=0.7, label=label_component)
     # Add vertical lines before setting the title
     #ax.axvline(99.0, linestyle=':', color='lightgray')
     #ax.axvline(102.0, linestyle=':', color='lightgray')
@@ -150,41 +174,24 @@ for i, (label, y_vals) in enumerate(silicon_data.items()):
     ax.invert_xaxis()
 
 fig.tight_layout(rect=[0, 0, 1, 0.95])
-fig.suptitle("Silicon 2p Core Level Fits", fontsize=16, y=0.98)
+fig.suptitle("Oxygen 1s Core Level Fits", fontsize=16, y=.98)
 plt.show()
 
-fig_pct, ax_pct = plt.subplots(figsize=(7, 5))
+# Plot percentages vs. temperature
+fig_pct, ax_pct = plt.subplots(figsize=(8, 5))
 
 temperatures = ["0°C", "250°C", "450°C"]
-labels = ["SiC", "SiO2"]
-colors = ['tab:green', 'tab:red']
+components = ["C-O compounds", "Hydrocarbons", "Si oxides", "Adsorbed water / organics"]
+colors = ["tab:green", "tab:red", "tab:purple", "tab:brown"]
 
-percent_data = {label: [] for label in labels}
+for i, comp in enumerate(components):
+    values = [percent_results[temp][i] if temp in percent_results else None for temp in temperatures]
+    ax_pct.plot([0, 250, 450], values, marker='o', label=comp, color=colors[i])
 
-for temp in temperatures:
-    if fit_results[temp] is not None:
-        x_dense = np.linspace(silicon_x_vals.min(), silicon_x_vals.max(), 2000)
-        params = fit_results[temp]
-        total_y = multi_voigt(x_dense, *params)
-        total_area = trapezoid(total_y, x_dense)
-        for i in range(0, len(params), 4):
-            y_comp = voigt(x_dense, *params[i:i+4])
-            area = trapezoid(y_comp, x_dense)
-            percent = 100 * area / total_area
-            label_comp = labels[i // 4]
-            percent_data[label_comp].append(percent)
-    else:
-        for label_comp in labels:
-            percent_data[label_comp].append(None)
-
-for i, label in enumerate(labels):
-    ax_pct.plot([0, 250, 450], percent_data[label], label=label, marker='o', color=colors[i])
-
-ax_pct.set_title("Percentage of Components vs Temperature")
+ax_pct.set_title("Oxygen Peak Component Percentages vs Temperature")
 ax_pct.set_xlabel("Temperature (°C)")
-ax_pct.set_ylabel("Percentage (%)")
+ax_pct.set_ylabel("Percentage of Total Area (%)")
 ax_pct.legend()
 ax_pct.grid(True)
-
 fig_pct.tight_layout()
 plt.show()

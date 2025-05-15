@@ -61,10 +61,11 @@ element_map = {
 }
 
 # Select X-ray source: "Mg" or "Al"
-element = "Al"
+element = "Mg"
 
 # select annealing themperature
-base_path = f"GR_SiC_250_C/Al300w/"  # 250°C annealing
+#base_path = f"GR_SiC_250_C/Al300w/"  # 250°C annealing
+base_path = f"GR_SiC_450_C/Al300w/" # 450°C annealing
 
 # Data files to process
 files = ["70_130.txt", "140_200.txt", "260_300.txt", "500_550.txt"]
